@@ -1,52 +1,66 @@
-# N5 Voice Tutor
+# Kaiwa
 
-Japanese conversation tutor with live word-bank checking and English help.
+A bilingual Japanese conversation tutor. Voice demo built with [Pipecat](https://github.com/pipecat-ai/pipecat) and Deepgram Flux (STT + TTS).
 
-## Run
+Practice Japanese out loud, switch to English whenever you need help, and watch target words check off as you use them.
+
+## What it shows
+
+- **Flux STT turn detection** with adjustable patience (`eot_threshold` / `eot_timeout_ms`, updated mid-stream)
+- **Two Flux STT streams in parallel**: Japanese and English, so mixed-language speech is always transcribed by the right model
+- **Flux TTS with per-language voices** in a single reply (Japanese voice for Japanese, English voice for English)
+- **Karaoke-style highlighting** from TTS chunk markers synced to the audio
+- **Decision routing** with Pipecat's `OpenAIDecisionsClassifier`: which language was spoken, practice vs. help, and whether a target word was really used
+
+## Demo flow
+
+1. Press **Start** (`S`). The tutor asks: こんにちは！ 今日、何を食べましたか？
+2. Answer in Japanese. Used words fly into the word bank and turn green.
+3. Ask something in English ("How do you say rice?"). The tutor switches to English help.
+4. Say "I'm back" or answer in Japanese to continue the conversation.
+
+English subtitles appear under every Japanese line. `M` mutes the mic.
+
+## Architecture
+
+```
+mic ─► ParallelPipeline ┬─ Flux STT (flux-general-multi, ja hint) ── owns turns
+                        └─ Flux STT (flux-general-en) ─► EnglishCollector
+    ─► ModeRouter (Decisions API: language → mode; word checks)
+    ─► LLM ─► BilingualFluxTTS (ja/en runs) ─► speaker
+```
+
+| Piece | File |
+|---|---|
+| Pipeline, transport, RTVI events | `bot.py` |
+| Mode routing, prompt/TTS settings frames | `router.py`, `intent.py` |
+| English shadow stream | `english_shadow.py` |
+| Per-language Flux TTS + karaoke markers | `tts_bilingual.py` |
+| Word bank + usage judge | `vocab.py` |
+| Subtitles | `translator.py` |
+| React client (Pipecat client SDK + Pipecat UI conversation, neobrutalism.dev components) | `client/` |
+
+## Deepgram notes
+
+- **STT:** a `ja` hint keeps accented Japanese in Japanese but garbles English, and `ja`+`en` does the reverse. Running a second `flux-general-en` stream and letting the classifier pick the intelligible transcript avoids the trade-off.
+- **TTS:** Flux TTS can't change voice on an open WebSocket, so replies are split into ja/en runs and sent to REST `/v2/speak`, fetched concurrently and played in order. Flux TTS has no word timings; karaoke is estimated per chunk.
+
+## Run it
+
+Requires Python 3.12+, [uv](https://docs.astral.sh/uv/) and Node 20+.
 
 ```bash
+cp .env.example .env          # add DEEPGRAM_API_KEY and OPENAI_API_KEY
 uv sync
 (cd client && npm install && npm run build)
-uv run python server.py   # http://localhost:7860
+uv run python server.py       # http://localhost:7860
 ```
 
-UI dev with hot reload: keep `server.py` running, then `cd client && npm run dev` (Vite proxies `/api` to it).
+For UI development, keep `server.py` running and use `cd client && npm run dev` (Vite proxies `/api`).
 
-Needs `DEEPGRAM_API_KEY` and `OPENAI_API_KEY` in `.env`. Use headphones or browser echo cancellation.
+Optional env: `JA_VOICE` (default `flux-ayumi-ja`), `HELP_VOICE` (`flux-hannah-en`), `LLM_MODEL` (`gpt-6.2-sol`).
 
-## Stack
+## Notes
 
-| Piece | Choice |
-|---|---|
-| Transport | Pipecat SmallWebRTC |
-| Client | React 19 in `client/`: Pipecat client SDK + Pipecat UI conversation/audio pieces, neobrutalism.dev components |
-| Subtitles | `gpt-4.1-mini` translates Japanese lines to English for the audience (`translator.py`) |
-| STT + turn detection | Two Deepgram Flux streams on the same mic: `flux-general-multi` (hint `ja`) owns turns; `flux-general-en` runs alongside for English |
-| LLM | OpenAI `gpt-4.1` (`LLM_MODEL`) |
-| TTS | Deepgram Flux TTS REST, per-language runs: `flux-sayaka-ja` (`JA_VOICE`) for Japanese, `flux-hannah-en` (`HELP_VOICE`) for English |
-| Word judge | OpenAI Decisions API, `gpt-6-luna` |
-
-## Pipeline
-
-```
-mic -> [Flux ja | Flux en -> EnglishCollector] -> ModeRouter -> user ctx -> LLM -> Flux TTS -> speaker -> assistant ctx
-```
-
-- `router.py` + `intent.py`: two modes, `CONVERSATION` and `HELP`
-  - At each Japanese end of turn, both transcripts go to the Decisions API (`gpt-6-luna`, ~150-300 ms) before the LLM. It returns `conversation` or `help` with probabilities, which show in the debug panel.
-  - The LLM gets the transcript that matches the mode: Japanese for conversation, English for help.
-  - Help: English questions, "what does X mean", "is this correct", or speaking English to the tutor.
-  - Conversation: Japanese answers, or "I'm back" / "resume" / "let's continue". A Japanese answer during help also resumes.
-  - On a mode change: swap the system prompt, and add a resume note with the last tutor question and partial answer.
-- `english_shadow.py`: `EnglishCollector` keeps the English stream's text and swallows its frames, so it never drives turns. Its transcripts stay out of the UI via `RTVIObserverParams(ignored_sources=...)`.
-- `vocab.py`: N5 word pool, stem matcher (live tentative highlight), Decisions judge
-  - Only learner turns in `CONVERSATION` are judged; tutor speech is never transcribed.
-  - Per word: `correct` (affirmative, any politeness), `wrong_form` (negated or wrong meaning), `mentioned_only` (asked about or quoted), `absent`
-- Patience slider sends `STTUpdateSettingsFrame`, which updates Flux `eot_threshold` / `eot_timeout_ms` mid-stream.
-
-## Demo script
-
-1. Answer the tutor in Japanese and watch the word chips light up.
-2. Ask "How do you say restaurant in Japanese?" to get English help.
-3. Say "Okay, I'm back", or answer in Japanese. The conversation resumes.
-4. Click Stop to see the summary.
+- Headphones recommended, so the tutor's voice doesn't reach the mic.
+- Local only (SmallWebRTC, no auth); not set up for deployment.
