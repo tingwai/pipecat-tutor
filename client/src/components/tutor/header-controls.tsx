@@ -1,6 +1,5 @@
 import { RTVIEvent } from "@pipecat-ai/client-js";
 import {
-  usePipecatClient,
   usePipecatClientMicControl,
   usePipecatClientTransportState,
   useRTVIClientEvent,
@@ -9,7 +8,6 @@ import { MicIcon, MicOffIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useTutor } from "@/lib/tutor-store";
 import { cn } from "@/lib/utils";
 
 const useLive = () => {
@@ -76,39 +74,6 @@ export function StatusPill() {
   );
 }
 
-/** Current mode, highlighted; click to force a switch (it also switches on its own). */
-export function ModeSwitch() {
-  const client = usePipecatClient();
-  const live = useLive();
-  const mode = useTutor((s) => s.mode);
-
-  const item = (key: "conversation" | "help", label: string, sub: string, color: string, action: string) => {
-    const on = mode === key;
-    return (
-      <button
-        type="button"
-        disabled={!live || on}
-        onClick={() => client?.sendClientMessage("mode", { action })}
-        className={cn(
-          "flex flex-col items-start px-3 py-1 text-left leading-tight transition-colors",
-          on ? color : "bg-secondary-background text-muted-foreground hover:text-foreground",
-          !on && live && "cursor-pointer",
-        )}
-      >
-        <span className="text-sm font-extrabold">{label}</span>
-        <span className="text-[10px] font-semibold">{sub}</span>
-      </button>
-    );
-  };
-
-  return (
-    <div className="rounded-base border-border shadow-shadow flex overflow-hidden border-2 [&>button+button]:border-l-2 [&>button+button]:border-border">
-      {item("conversation", "Japanese practice", "speak Japanese", "bg-practice", "resume")}
-      {item("help", "English help", "ask in English", "bg-help", "help")}
-    </div>
-  );
-}
-
 /** Mic toggle; M toggles it too (outside text fields). */
 export function MicButton() {
   const live = useLive();
@@ -145,9 +110,29 @@ export function SessionButton({ onStart, onEnd }: { onStart: () => void; onEnd: 
   const transport = usePipecatClientTransportState();
   const live = useLive();
   const busy = transport === "connecting" || transport === "authenticating" || transport === "disconnecting";
+  const toggle = live ? onEnd : onStart;
+
+  // S starts/ends the session (outside text fields)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyS" || e.repeat || e.metaKey || e.ctrlKey || e.altKey || busy) return;
+      if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable=true]")) return;
+      e.preventDefault();
+      toggle();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggle, busy]);
+
   return (
-    <Button onClick={live ? onEnd : onStart} disabled={busy} className={cn("w-28", live && "bg-secondary-background")}>
+    <Button
+      onClick={toggle}
+      disabled={busy}
+      className={cn("w-32", live && "bg-secondary-background")}
+      title="Start / end (S)"
+    >
       {busy ? "…" : live ? "End" : "Start"}
+      <kbd className="rounded-sm border-border border px-1 text-[10px]">S</kbd>
     </Button>
   );
 }

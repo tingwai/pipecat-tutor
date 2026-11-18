@@ -30,32 +30,42 @@ _SWALLOW = (
 )
 
 
+def _after(full: str, consumed: str) -> str:
+    """Text of `full` (a cumulative Flux transcript) past the already-consumed prefix."""
+    if not consumed:
+        return full
+    if full.startswith(consumed):
+        return full[len(consumed) :].strip()
+    # Wording of the prefix shifted between updates: skip the same number of words
+    return " ".join(full.split()[len(consumed.split()) :])
+
+
 class EnglishCollector(FrameProcessor):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._finals: list[tuple[float, str]] = []  # (time, text) of English EndOfTurn transcripts
-        self._partial = ""  # current English turn so far
-        self._open = False  # English stream is mid-utterance
-        # Set when the router took the text of an utterance the English stream hasn't finished;
-        # its late updates/final belong to the consumed turn and are dropped
-        self._stale = False
+        self._turn_text = ""  # latest cumulative transcript of the open English utterance
+        self._partial = ""  # part of it not yet consumed by the router
+        # The English stream's utterances don't line up with the Japanese stream's turns: one English
+        # utterance can span two learner turns. When the router takes text mid-utterance, remember
+        # that prefix and keep only what comes after it.
+        self._consumed = ""
         # Set by bot.py: sends live English text to the UI
         self.on_text: Callable[[dict[str, Any]], Awaitable[None]] | None = None
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
         if isinstance(frame, ProposedUserStartedSpeakingFrame):
-            # New English utterance: anything from now on is fresh
-            self._open, self._stale, self._partial = True, False, ""
+            # New English utterance: nothing consumed from it yet
+            self._turn_text = self._partial = self._consumed = ""
         elif isinstance(frame, TranscriptionFrame):
-            self._open = False
-            if self._stale:
-                self._stale = False
-            elif frame.text.strip():
-                self._finals.append((time.time(), frame.text.strip()))
-            self._partial = ""
-        elif isinstance(frame, InterimTranscriptionFrame) and not self._stale:
-            self._partial = frame.text.strip()
+            rest = _after(frame.text.strip(), self._consumed)
+            if rest:
+                self._finals.append((time.time(), rest))
+            self._turn_text = self._partial = self._consumed = ""
+        elif isinstance(frame, InterimTranscriptionFrame):
+            self._turn_text = frame.text.strip()
+            self._partial = _after(self._turn_text, self._consumed)
             await self._emit()
         if isinstance(frame, _SWALLOW):
             return
@@ -67,11 +77,11 @@ class EnglishCollector(FrameProcessor):
             await self.on_text({"type": "en_live", "text": text})
 
     def take_since(self, start: float) -> str:
-        """English text heard since `start` (finals + in-progress partial); consumes it."""
+        """English text heard since `start` (finals + unconsumed partial); consumes it."""
         texts = [t for ts, t in self._finals if ts >= start]
         self._finals = []
         if self._partial:
             texts.append(self._partial)
             self._partial = ""
-        self._stale = self._open
+        self._consumed = self._turn_text
         return " ".join(texts)

@@ -1,11 +1,11 @@
 import type { BotOutputText, ConversationMessage } from "@pipecat-ai/client-react";
-import { usePipecatClientTransportState, usePipecatConversation } from "@pipecat-ai/client-react";
+import { usePipecatConversation } from "@pipecat-ai/client-react";
 import { useCallback, useMemo } from "react";
 
 import { ConversationView } from "@/components/pipecat/conversation";
 import { MessageContent, type BotOutputRenderer } from "@/components/pipecat/conversation-message";
 import { KaraokeText } from "@/components/tutor/karaoke-text";
-import { normalize, useTutor, type Route, type Word } from "@/lib/tutor-store";
+import { normalize, OPENING_LINE, useTutor, type Route, type Word } from "@/lib/tutor-store";
 import { cn } from "@/lib/utils";
 
 const botOutputRenderers: Record<string, BotOutputRenderer> = {
@@ -21,12 +21,27 @@ function partText(text: unknown): string {
   return "";
 }
 
+// createdAt must be a valid date: MessageContent formats it as a timestamp
+const PREVIEW_AT = new Date(0).toISOString();
+const OPENING_PREVIEW: ConversationMessage = {
+  role: "assistant",
+  final: true,
+  createdAt: PREVIEW_AT,
+  parts: [
+    {
+      text: { spoken: OPENING_LINE, unspoken: "" },
+      final: true,
+      createdAt: PREVIEW_AT,
+      outputType: "sentence",
+    },
+  ],
+};
+
 const messageText = (m: ConversationMessage) => m.parts.map((p) => partText(p.text)).join("");
 
 /** Pipecat UI conversation list (ConversationView + usePipecatConversation) with tutor rows. */
 export function TutorConversation() {
   const noteAssistantMessage = useTutor((s) => s.noteAssistantMessage);
-  const transportState = usePipecatClientTransportState();
 
   const onMessageCreated = useCallback(
     (m: ConversationMessage) => {
@@ -43,17 +58,14 @@ export function TutorConversation() {
     return undefined;
   }, []);
 
-  const connecting = transportState === "connecting" || transportState === "authenticating";
-  const empty = (
-    <div className="max-w-sm text-center">
-      <div className="ja mb-2 text-4xl font-extrabold">こんにちは</div>
-      <p className="text-muted-foreground text-sm">
-        {connecting ? "Connecting to your tutor…" : "Press Start to begin a Japanese conversation."}
-      </p>
-    </div>
+  // Before the session's first message, show the opening line; the live (spoken) one replaces it in place
+  return (
+    <ConversationView
+      messages={messages.length ? messages : [OPENING_PREVIEW]}
+      renderMessage={renderMessage}
+      className="min-h-0"
+    />
   );
-
-  return <ConversationView messages={messages} renderMessage={renderMessage} empty={empty} className="min-h-0" />;
 }
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -162,17 +174,24 @@ function Highlighted({
   words: Word[];
   wordState: Record<string, { status: string }>;
 }) {
-  const stems = useMemo(
-    () => words.filter((w) => wordState[w.id]?.status === "correct").flatMap((w) => w.stems),
-    [words, wordState],
-  );
+  // stem -> word id, so each highlight can be the launch point of its word's flight
+  const stemToId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const w of words) if (wordState[w.id]?.status === "correct") for (const s of w.stems) m.set(s, w.id);
+    return m;
+  }, [words, wordState]);
+  const stems = [...stemToId.keys()];
   if (!stems.length) return <>{text}</>;
   const re = new RegExp(`(${stems.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
   return (
     <>
       {text.split(re).map((part, i) =>
-        stems.includes(part) ? (
-          <mark key={i} className="bg-success border-border rounded-sm border px-0.5 font-bold text-black">
+        stemToId.has(part) ? (
+          <mark
+            key={i}
+            data-word-mark={stemToId.get(part)}
+            className="bg-success border-border rounded-sm border px-0.5 font-bold text-black"
+          >
             {part}
           </mark>
         ) : (

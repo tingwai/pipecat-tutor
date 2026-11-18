@@ -46,7 +46,7 @@
     --background: #f6f1e7;
     --secondary-background: #ffffff;
     --foreground: #000000;
-    --main: #5294ff;
+    --main: #8ab6ff;
     --main-foreground: #000000;
     --border: #000000;
     --ring: #000000;
@@ -57,8 +57,8 @@
     --muted-foreground: #5f5b54;
     --destructive: #ff4d50;
 
-    --practice: #5294ff;
-    --help: #ff7ac6;
+    --practice: #a9cbff;
+    --help: #f7b6d8;
     --success: #05e17a;
     --warning: #facc00;
     --kara: #ffe45e;
@@ -92,4 +92,12 @@
 @keyframes karaoke-fade {
     from { background: var(--kara); }
     to { background: transparent; }
+}
+
+/* Word bank tile pop when a flying word lands (word-flight.tsx) */
+@keyframes tile-land {
+    0% { transform: scale(1); }
+    35% { transform: scale(1.12) rotate(-2deg); }
+    70% { transform: scale(0.97); }
+    100% { transform: scale(1); }
 }

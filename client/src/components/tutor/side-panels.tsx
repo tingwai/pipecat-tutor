@@ -3,7 +3,7 @@ import { usePipecatClient } from "@pipecat-ai/client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
-import { normalize, PATIENCE, useTutor, type Route, type VocabResult } from "@/lib/tutor-store";
+import { PATIENCE, useTutor, type Route } from "@/lib/tutor-store";
 import { cn } from "@/lib/utils";
 
 const pct = (p?: number) => (p === undefined ? "" : `${Math.round(p * 100)}%`);
@@ -84,7 +84,7 @@ export function DecisionPanel() {
       )}
       {!latest ? (
         <p className="text-muted-foreground text-sm">
-          Each time you speak, it decides which language you used, then whether you're practicing or asking for help.
+          Every turn: which language did you speak, and is it practice or a request for help?
         </p>
       ) : (
         <LatestTurn route={latest} />
@@ -115,7 +115,6 @@ function MiniChip({ on, children }: { on: string; children: React.ReactNode }) {
 }
 
 function LatestTurn({ route: r }: { route: Route }) {
-  const vocab = useTutor((s) => s.vocabByText[normalize(r.text)]);
   const switched = r.mode !== r.prev;
   return (
     <div className="flex flex-col gap-3">
@@ -130,35 +129,6 @@ function LatestTurn({ route: r }: { route: Route }) {
           Switched to {r.mode === "help" ? "English help" : "Japanese practice"}
         </div>
       )}
-      {vocab && <WordCheck results={vocab} />}
-    </div>
-  );
-}
-
-const VERDICT: Record<VocabResult["verdict"], { label: string; className: string }> = {
-  correct: { label: "used ✓", className: "bg-success" },
-  wrong_form: { label: "wrong form", className: "bg-destructive" },
-  mentioned_only: { label: "only mentioned", className: "bg-warning" },
-  absent: { label: "", className: "" },
-};
-
-function WordCheck({ results }: { results: VocabResult[] }) {
-  const words = useTutor((s) => s.words);
-  const hits = results.filter((r) => r.verdict !== "absent");
-  if (!hits.length) return null;
-  return (
-    <div>
-      <div className="mb-1.5 text-xs font-bold">Word bank check</div>
-      <div className="flex flex-wrap gap-1.5">
-        {hits.map((r) => {
-          const w = words.find((x) => x.id === r.word_id);
-          return (
-            <span key={r.word_id} className={cn("rounded-base border-border border-2 px-2 py-0.5 text-xs font-bold", VERDICT[r.verdict].className)}>
-              <span className="ja">{w?.ja}</span> {w?.en} · {VERDICT[r.verdict].label}
-            </span>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -168,7 +138,10 @@ function WordCheck({ results }: { results: VocabResult[] }) {
 export function WordBank() {
   const words = useTutor((s) => s.words);
   const wordState = useTutor((s) => s.wordState);
-  const done = words.filter((w) => wordState[w.id]?.status === "correct").length;
+  const flying = useTutor((s) => s.flying);
+  const landed = useTutor((s) => s.landed);
+  // A word in flight only counts once it lands
+  const done = words.filter((w) => wordState[w.id]?.status === "correct" && !flying.includes(w.id)).length;
 
   return (
     <Panel
@@ -185,12 +158,15 @@ export function WordBank() {
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {words.map((w) => {
-            const st = wordState[w.id]?.status ?? "idle";
+            const raw = wordState[w.id]?.status ?? "idle";
+            const st = flying.includes(w.id) ? "tentative" : raw;
             return (
               <div
                 key={w.id}
+                data-word-tile={w.id}
                 className={cn(
                   "rounded-base border-border relative border-2 px-2.5 py-1.5 transition-colors",
+                  landed.includes(w.id) && "animate-[tile-land_0.6s_ease-out]",
                   st === "correct" && "bg-success shadow-shadow",
                   st === "tentative" && "bg-warning",
                   st === "wrong" && "border-destructive border-dashed",
@@ -199,7 +175,6 @@ export function WordBank() {
                 {st === "correct" && <span className="absolute top-1 right-2 text-sm font-extrabold">✓</span>}
                 <div className="ja text-lg leading-tight font-extrabold">{w.ja}</div>
                 <div className="text-xs font-semibold">{w.en}</div>
-                <div className="ja text-muted-foreground text-[11px]">{w.reading}</div>
               </div>
             );
           })}

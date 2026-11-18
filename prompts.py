@@ -59,10 +59,3 @@ def resume_note(last_tutor_line: str | None, partial: str) -> str:
         "If the learner's next message answers your question, respond to that. If there is no answer yet, "
         "repeat or rephrase the question."
     )
-
-
-def opening_instruction() -> str:
-    return (
-        "Start the session: greet the learner warmly in simple Japanese and ask an easy opening "
-        "question that leads toward one of the target words."
-    )

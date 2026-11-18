@@ -1,6 +1,5 @@
 """N5 word bank, local inflection matcher, and Decisions-classifier usage judge."""
 
-import random
 from dataclasses import dataclass, field
 
 from pipecat.classifiers.base_classifier import BaseClassifier, ChoiceQuestion
@@ -41,13 +40,14 @@ N5_POOL: list[Word] = [
 ]
 
 
-def pick_words(n: int = 8, seed: int | None = None) -> list[Word]:
-    """Pick n words, mixing verbs/adjs/nouns so conversation can hit most of them."""
-    rng = random.Random(seed)
-    verbs = [w for w in N5_POOL if w.pos == "verb"]
-    others = [w for w in N5_POOL if w.pos != "verb"]
-    n_verbs = min(len(verbs), n // 2)
-    return rng.sample(verbs, n_verbs) + rng.sample(others, n - n_verbs)
+# Fixed demo set, in display order
+DEMO_WORDS = ["taberu", "nomu", "miru", "oishii", "kyou", "tomodachi", "eiga", "mizu"]
+
+
+def pick_words() -> list[Word]:
+    """The session's target words (fixed so demos are repeatable)."""
+    by_id = {w.id: w for w in N5_POOL}
+    return [by_id[i] for i in DEMO_WORDS]
 
 
 def local_hits(text: str, words: list[Word]) -> list[str]:

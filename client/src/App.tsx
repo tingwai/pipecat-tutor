@@ -1,14 +1,14 @@
 import { PipecatClient } from "@pipecat-ai/client-js";
 import { PipecatClientProvider, usePipecatClient } from "@pipecat-ai/client-react";
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { BotAudioOutput, unlockBotAudio } from "@/components/pipecat/bot-audio";
-import { MicButton, ModeSwitch, SessionButton, StatusPill } from "@/components/tutor/header-controls";
+import { MicButton, SessionButton, StatusPill } from "@/components/tutor/header-controls";
 import { DecisionPanel, PatiencePanel, WordBank } from "@/components/tutor/side-panels";
-import { SummaryDialog } from "@/components/tutor/summary-dialog";
 import { TutorConversation } from "@/components/tutor/tutor-conversation";
 import { TutorEvents } from "@/components/tutor/tutor-events";
+import { WordFlight } from "@/components/tutor/word-flight";
 import { PATIENCE, useTutor } from "@/lib/tutor-store";
 
 export default function App() {
@@ -20,7 +20,7 @@ export default function App() {
       <BotAudioOutput />
       <TutorEvents />
       <Tutor />
-      <SummaryDialog />
+      <WordFlight />
     </PipecatClientProvider>
   );
 }
@@ -47,9 +47,6 @@ function useSession() {
 
   const end = useCallback(async () => {
     if (!client) return;
-    // Ask for the session summary before hanging up
-    client.sendClientMessage("summary", {});
-    await new Promise((r) => setTimeout(r, 400));
     await client.disconnect();
   }, [client]);
 
@@ -58,14 +55,6 @@ function useSession() {
 
 function Tutor() {
   const { start, end } = useSession();
-
-  // Auto-start on load (guarded against StrictMode's double effect)
-  const started = useRef(false);
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    void start();
-  }, [start]);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -81,7 +70,6 @@ function Tutor() {
         </div>
         <StatusPill />
         <div className="flex-1" />
-        <ModeSwitch />
         <MicButton />
         <SessionButton onStart={start} onEnd={end} />
       </header>
@@ -106,13 +94,11 @@ function Tutor() {
 /** One-line legend so a non-Japanese-speaking audience can follow along. */
 function HowItWorks() {
   const steps = [
-    ["Speak Japanese", "to practice"],
     ["Ask in English", "for help"],
     ["Say “I'm back”", "to return"],
-    ["Use a target word", "to check it off"],
   ];
   return (
-    <div className="border-border bg-background flex flex-wrap gap-x-5 gap-y-1 border-t-2 px-4 py-2.5 text-xs">
+    <div className="border-border bg-background grid grid-cols-2 gap-y-1 border-t-2 px-4 py-2.5 text-center text-xs">
       {steps.map(([a, b]) => (
         <span key={a}>
           <b>{a}</b> {b}

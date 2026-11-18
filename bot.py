@@ -11,7 +11,7 @@ from typing import Any
 from loguru import logger
 
 from pipecat.classifiers.openai.decisions.classifier import OpenAIDecisionsClassifier
-from pipecat.frames.frames import LLMMessagesAppendFrame, STTUpdateSettingsFrame
+from pipecat.frames.frames import STTUpdateSettingsFrame, TTSSpeakFrame
 from pipecat.pipeline.parallel_pipeline import ParallelPipeline
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
@@ -43,6 +43,9 @@ JA_VOICE = os.getenv("JA_VOICE", "flux-ayumi-ja")
 HELP_VOICE = os.getenv("HELP_VOICE", "flux-hannah-en")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-6.2-sol")
 
+# Also shown (with its English) before Start in client/src/lib/tutor-store.ts; keep in sync
+OPENING_LINE = "こんにちは！ 今日、何を食べましたか？"
+
 # Patience presets: Flux end-of-turn confidence + max silence before forcing turn end
 DEFAULT_EOT_THRESHOLD = 0.8
 DEFAULT_EOT_TIMEOUT_MS = 6000
@@ -50,7 +53,7 @@ DEFAULT_EOT_TIMEOUT_MS = 6000
 
 async def run_bot(connection: SmallWebRTCConnection, body: dict[str, Any] | None):
     body = body or {}
-    words = pick_words(int(body.get("word_count", 8)))
+    words = pick_words()
     eot_threshold = float(body.get("eot_threshold", DEFAULT_EOT_THRESHOLD))
     eot_timeout_ms = int(body.get("eot_timeout_ms", DEFAULT_EOT_TIMEOUT_MS))
 
@@ -166,12 +169,9 @@ async def run_bot(connection: SmallWebRTCConnection, body: dict[str, Any] | None
             }
         )
         await notify(router.snapshot())
-        await task.queue_frame(
-            LLMMessagesAppendFrame(
-                messages=[{"role": "developer", "content": prompts.opening_instruction()}],
-                run_llm=True,
-            )
-        )
+        # Fixed opening line for demos; spoken directly and added to context as the tutor's turn
+        router.last_tutor_line = OPENING_LINE
+        await task.queue_frame(TTSSpeakFrame(OPENING_LINE))
 
     @rtvi.event_handler("on_client_message")
     async def on_client_message(rtvi, msg):
@@ -188,14 +188,6 @@ async def run_bot(connection: SmallWebRTCConnection, body: dict[str, Any] | None
         elif msg.type == "translate" and data.get("text"):
             # Client asks for subtitles of tutor lines once the reply text is complete
             router.translate_async(data["text"])
-        elif msg.type == "summary":
-            await notify(
-                {
-                    "type": "summary",
-                    "practiced": router.practiced,
-                    "attempts": router.attempts,
-                }
-            )
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):

@@ -43,11 +43,6 @@ export interface KaraokeRun {
   end?: number;
 }
 
-export interface Summary {
-  practiced: Record<string, string>;
-  attempts: Record<string, string[]>;
-}
-
 export const PATIENCE = [
   { name: "Snappy", eot_threshold: 0.7, eot_timeout_ms: 3000 },
   { name: "Relaxed", eot_threshold: 0.75, eot_timeout_ms: 4500 },
@@ -55,6 +50,10 @@ export const PATIENCE = [
   { name: "Very patient", eot_threshold: 0.85, eot_timeout_ms: 9000 },
   { name: "Take your time", eot_threshold: 0.9, eot_timeout_ms: 14000 },
 ] as const;
+
+/** Tutor's fixed first line (bot.py OPENING_LINE), shown before Start and spoken on Start. */
+export const OPENING_LINE = "こんにちは！ 今日、何を食べましたか？";
+export const OPENING_EN = "Hello! What did you eat today?";
 
 const CHARS_PER_SEC = { ja: 7, en: 14 } as const;
 const MAX_TURNS = 20;
@@ -77,15 +76,16 @@ interface TutorState {
   runs: KaraokeRun[];
   assistantModes: Record<string, Mode>; // assistant message createdAt -> mode
   lastError: string | null;
-  summary: Summary | null;
+  flying: string[]; // word ids animating from the learner's bubble to the word bank
+  landed: string[]; // word ids that just landed (tile pop)
   patience: number; // index into PATIENCE
 
   reset: () => void;
   handleServerMessage: (m: ServerMessage) => void;
   clearRuns: () => void;
+  land: (wordId: string) => void;
   noteAssistantMessage: (createdAt: string) => void;
   setPatience: (i: number) => void;
-  setSummary: (s: Summary | null) => void;
 }
 
 const initial = {
@@ -95,12 +95,13 @@ const initial = {
   turns: [],
   routes: {},
   vocabByText: {},
-  translations: {},
+  translations: { [OPENING_LINE.replace(/\s+/g, "")]: OPENING_EN } as Record<string, string>,
   enLive: "",
   runs: [],
   assistantModes: {},
   lastError: null,
-  summary: null,
+  flying: [],
+  landed: [],
 };
 
 export const useTutor = create<TutorState>()((set, get) => {
@@ -116,10 +117,13 @@ export const useTutor = create<TutorState>()((set, get) => {
 
     reset: () => set({ ...initial }),
     clearRuns: () => set({ runs: [] }),
+    land: (id) => {
+      set((s) => ({ flying: s.flying.filter((x) => x !== id), landed: [...s.landed, id] }));
+      setTimeout(() => set((s) => ({ landed: s.landed.filter((x) => x !== id) })), 700);
+    },
     noteAssistantMessage: (createdAt) =>
       set((s) => ({ assistantModes: { ...s.assistantModes, [createdAt]: s.mode } })),
     setPatience: (patience) => set({ patience }),
-    setSummary: (summary) => set({ summary }),
 
     handleServerMessage: (m) => {
       switch (m.type) {
@@ -156,7 +160,12 @@ export const useTutor = create<TutorState>()((set, get) => {
         case "vocab_decision": {
           const results = m.results as VocabResult[];
           for (const r of results) {
-            if (r.verdict === "correct") setWord(r.word_id, "correct");
+            if (r.verdict === "correct") {
+              // Newly used words fly from the bubble into the word bank (see word-flight.tsx)
+              if (get().wordState[r.word_id]?.status !== "correct")
+                set((s) => ({ flying: [...s.flying, r.word_id] }));
+              setWord(r.word_id, "correct");
+            }
             else if (r.verdict === "wrong_form") setWord(r.word_id, "wrong", "wrong form");
             else if (get().wordState[r.word_id]?.status === "tentative")
               setWord(
@@ -170,9 +179,6 @@ export const useTutor = create<TutorState>()((set, get) => {
         }
         case "decision_error":
           set({ lastError: m.error });
-          break;
-        case "summary":
-          set({ summary: { practiced: m.practiced, attempts: m.attempts } });
           break;
         case "tts_run": {
           const now = performance.now();
