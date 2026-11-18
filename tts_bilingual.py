@@ -112,7 +112,7 @@ class BilingualFluxTTSService(DeepgramHttpTTSService):
                 lang, chunk = runs[i]
                 # Exact duration if this run already finished downloading; else the UI estimates
                 duration_ms = int(sizes[i] / (2 * self.sample_rate) * 1000) if tasks[i].done() else None
-                yield self._run_marker("start", lang, chunk, duration_ms)
+                yield self._run_marker("start", text, lang, chunk, duration_ms)
 
                 async def chunks(q=q):
                     while (item := await q.get()) is not None:
@@ -123,13 +123,23 @@ class BilingualFluxTTSService(DeepgramHttpTTSService):
                 async for frame in self._stream_audio_frames_from_iterator(chunks(), context_id=context_id):
                     await self.stop_ttfb_metrics()
                     yield frame
-                yield self._run_marker("end", lang, chunk, None)
+                yield self._run_marker("end", text, lang, chunk, None)
         except Exception as e:
             yield ErrorFrame(f"Error getting audio: {e}")
         finally:
             for t in tasks:
                 t.cancel()
 
-    def _run_marker(self, state: str, lang: str, text: str, duration_ms: int | None) -> Frame:
-        data = {"type": "tts_run", "state": state, "lang": lang, "text": text, "duration_ms": duration_ms}
+    def _run_marker(
+        self, state: str, sentence: str, lang: str, text: str, duration_ms: int | None
+    ) -> Frame:
+        # `sentence` is run_tts's input, matching the UI's BotOutput sentence part
+        data = {
+            "type": "tts_run",
+            "state": state,
+            "sentence": sentence,
+            "lang": lang,
+            "text": text,
+            "duration_ms": duration_ms,
+        }
         return OutputTransportMessageFrame(message=ServerMessage(data=data).model_dump(exclude_none=True))

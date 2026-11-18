@@ -55,8 +55,9 @@ def resume_note(last_tutor_line: str | None, partial: str) -> str:
         "Resume the Japanese conversation where it left off, in Japanese only. "
         f"Your last Japanese question was: {last_tutor_line or '(none)'}. "
         f"Learner's partial answer before the break: {partial or '(none)'}. "
-        "If the learner's next message answers it, respond to that. If there is no answer yet, "
-        "briefly welcome them back (e.g. おかえりなさい) and gently repeat or rephrase the question."
+        "Continue as if there had been no break: don't welcome them back or mention the English help. "
+        "If the learner's next message answers your question, respond to that. If there is no answer yet, "
+        "repeat or rephrase the question."
     )
 
 

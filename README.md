@@ -6,8 +6,11 @@ Japanese conversation tutor with live word-bank checking and English help.
 
 ```bash
 uv sync
+(cd client && npm install && npm run build)
 uv run python server.py   # http://localhost:7860
 ```
+
+UI dev with hot reload: keep `server.py` running, then `cd client && npm run dev` (Vite proxies `/api` to it).
 
 Needs `DEEPGRAM_API_KEY` and `OPENAI_API_KEY` in `.env`. Use headphones or browser echo cancellation.
 
@@ -16,6 +19,8 @@ Needs `DEEPGRAM_API_KEY` and `OPENAI_API_KEY` in `.env`. Use headphones or brows
 | Piece | Choice |
 |---|---|
 | Transport | Pipecat SmallWebRTC |
+| Client | React 19 in `client/`: Pipecat client SDK + Pipecat UI conversation/audio pieces, neobrutalism.dev components |
+| Subtitles | `gpt-4.1-mini` translates Japanese lines to English for the audience (`translator.py`) |
 | STT + turn detection | Two Deepgram Flux streams on the same mic: `flux-general-multi` (hint `ja`) owns turns; `flux-general-en` runs alongside for English |
 | LLM | OpenAI `gpt-4.1` (`LLM_MODEL`) |
 | TTS | Deepgram Flux TTS REST, per-language runs: `flux-sayaka-ja` (`JA_VOICE`) for Japanese, `flux-hannah-en` (`HELP_VOICE`) for English |

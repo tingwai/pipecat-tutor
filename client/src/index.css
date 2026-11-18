@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Neobrutalism (neobrutalism.dev) tokens + tutor colors. Light only, by design. */
+@theme inline {
+    --font-sans: "Lexend", "Noto Sans JP", sans-serif;
+    --font-heading: "Lexend", "Noto Sans JP", sans-serif;
+
+    /* neobrutalism */
+    --color-main: var(--main);
+    --color-main-foreground: var(--main-foreground);
+    --color-background: var(--background);
+    --color-secondary-background: var(--secondary-background);
+    --color-foreground: var(--foreground);
+    --color-border: var(--border);
+    --color-ring: var(--ring);
+    --color-overlay: var(--overlay);
+    --spacing-boxShadowX: 4px;
+    --spacing-boxShadowY: 4px;
+    --spacing-reverseBoxShadowX: -4px;
+    --spacing-reverseBoxShadowY: -4px;
+    --radius-base: 6px;
+    --font-weight-base: 500;
+    --font-weight-heading: 700;
+    --shadow-shadow: var(--shadow);
+
+    /* shadcn names still used by vendored Pipecat UI pieces */
+    --color-card: var(--secondary-background);
+    --color-card-foreground: var(--foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-destructive: var(--destructive);
+    --color-primary: var(--main);
+    --color-primary-foreground: var(--main-foreground);
+
+    /* tutor: Japanese practice = blue, English help = pink */
+    --color-practice: var(--practice);
+    --color-help: var(--help);
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-kara: var(--kara);
+}
+
+:root {
+    --background: #f6f1e7;
+    --secondary-background: #ffffff;
+    --foreground: #000000;
+    --main: #5294ff;
+    --main-foreground: #000000;
+    --border: #000000;
+    --ring: #000000;
+    --overlay: rgb(0 0 0 / 0.6);
+    --shadow: 4px 4px 0px 0px var(--border);
+
+    --muted: #efebe2;
+    --muted-foreground: #5f5b54;
+    --destructive: #ff4d50;
+
+    --practice: #5294ff;
+    --help: #ff7ac6;
+    --success: #05e17a;
+    --warning: #facc00;
+    --kara: #ffe45e;
+}
+
+@layer base {
+    body {
+        @apply bg-background text-foreground;
+        font-weight: var(--font-weight-base);
+    }
+    h1, h2, h3, h4, h5, h6 {
+        font-weight: var(--font-weight-heading);
+    }
+}
+
+.ja {
+    font-family: "Noto Sans JP", "Lexend", sans-serif;
+}
+
+/* Karaoke (karaoke-text.tsx): chars light up as the chunk plays, then the highlight fades */
+.karaoke-fill {
+    animation: karaoke-fill 0.12s linear both;
+}
+@keyframes karaoke-fill {
+    from { color: var(--muted-foreground); }
+    to { color: var(--foreground); background: var(--kara); }
+}
+.karaoke-fade {
+    animation: karaoke-fade 0.6s ease-out both;
+}
+@keyframes karaoke-fade {
+    from { background: var(--kara); }
+    to { background: transparent; }
+}

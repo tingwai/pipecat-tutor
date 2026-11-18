@@ -34,6 +34,7 @@ import aiohttp
 import prompts
 from english_shadow import EnglishCollector
 from intent import ModeJudge
+from translator import Translator
 from router import Mode, ModeRouter
 from tts_bilingual import BilingualFluxTTSService
 from vocab import VocabJudge, pick_words
@@ -115,6 +116,7 @@ async def run_bot(connection: SmallWebRTCConnection, body: dict[str, Any] | None
         mode_judge=ModeJudge(classifier),
         classifier=classifier,
         english=english,
+        translator=Translator(),
     )
 
     pipeline = Pipeline(
@@ -183,6 +185,9 @@ async def run_bot(connection: SmallWebRTCConnection, body: dict[str, Any] | None
             )
             await task.queue_frame(STTUpdateSettingsFrame(delta=delta))
             await notify({"type": "patience", **data})
+        elif msg.type == "translate" and data.get("text"):
+            # Client asks for subtitles of tutor lines once the reply text is complete
+            router.translate_async(data["text"])
         elif msg.type == "summary":
             await notify(
                 {

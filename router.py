@@ -33,6 +33,7 @@ from pipecat.transcriptions.language import Language
 
 import prompts
 from english_shadow import EnglishCollector
+from translator import Translator, key
 from intent import ModeJudge
 from vocab import VocabJudge, Word, WordResult, local_hits
 
@@ -64,6 +65,7 @@ class ModeRouter(FrameProcessor):
         mode_judge: ModeJudge,
         classifier: BaseClassifier,
         english: EnglishCollector,
+        translator: Translator,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -73,6 +75,7 @@ class ModeRouter(FrameProcessor):
         self._vocab_judge = judge
         self._mode_judge = mode_judge
         self._english = english
+        self._translator = translator
         self._turn_start = time.time()
 
         self.mode = Mode.CONVERSATION
@@ -197,6 +200,8 @@ class ModeRouter(FrameProcessor):
         # LLM gets the transcript step 1 judged intelligible
         llm_text = (d.transcript if d else text) or text or en_text
         frame.text = llm_text
+        if d and d.language == "japanese" and llm_text:
+            self.translate_async(llm_text)
 
         await self._notify(
             {
@@ -226,6 +231,18 @@ class ModeRouter(FrameProcessor):
             else:
                 vocab_task.cancel()
         return True
+
+    # ---- subtitles ----
+
+    def translate_async(self, text: str):
+        """English subtitle for a Japanese line, sent to the UI keyed by its text."""
+
+        async def run():
+            en = await self._translator.to_english(text)
+            if en:
+                await self._notify({"type": "translation", "key": key(text), "en": en})
+
+        asyncio.create_task(run())
 
     # ---- transitions ----
 

@@ -1,11 +1,15 @@
-"""Local dev server: serves the UI and brokers SmallWebRTC offers to the bot."""
+"""Local server: brokers SmallWebRTC offers to the bot and serves the built React client.
+
+Dev: run this, plus `npm run dev` in client/ (Vite proxies /api here).
+Prod-ish: `npm run build` in client/, then this serves client/dist at /.
+"""
 
 import argparse
+from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv(override=True)
@@ -37,12 +41,10 @@ async def ice_candidate(request: SmallWebRTCPatchRequest):
     return {"status": "success"}
 
 
-@app.get("/")
-async def index():
-    return FileResponse("static/index.html")
-
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
+CLIENT_DIST = Path(__file__).parent / "client" / "dist"
+if CLIENT_DIST.exists():
+    # Mounted last so /api routes win
+    app.mount("/", StaticFiles(directory=CLIENT_DIST, html=True), name="client")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
